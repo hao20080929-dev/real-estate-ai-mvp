@@ -44,41 +44,25 @@ class TacticalPDF(FPDF):
     def __init__(self, property_name):
         super().__init__()
         self.property_name = property_name
-        # 註冊字體 (優先讀取專案目錄下的 msjh.ttc 以支援雲端部署)
-        # 嘗試多種可能的字體檔名（大小寫與粗體檔）以提高相容性
-        candidate_fonts = [
-            "msjh.ttc",
-            "MSJH.TTC",
-            "MSJHBD.TTC",
-            "MSJHL.TTC",
-        ]
-        system_font_path = r"C:\Windows\Fonts\msjh.ttc"
-
-        font_path = None
-        for fn in candidate_fonts:
-            if os.path.exists(fn):
-                font_path = fn
-                break
-
-        if not font_path and os.path.exists(system_font_path):
+        # 註冊字體 (優先讀取專案目錄下的 MSJH.TTC 以支援雲端部署)
+        local_font_path = "MSJH.TTC"
+        local_font_path_b = "MSJHBD.TTC"
+        system_font_path = r"C:\Windows\Fonts\MSJH.TTC"
+        system_font_path_b = r"C:\Windows\Fonts\MSJHBD.TTC"
+        
+        if os.path.exists(local_font_path):
+            font_path = local_font_path
+            font_path_b = local_font_path_b if os.path.exists(local_font_path_b) else font_path
+        elif os.path.exists(system_font_path):
             font_path = system_font_path
-
-        if font_path:
-            # 使用 uni=True 確保支援多國字元
-            try:
-                self.add_font("MSJH", "", font_path, uni=True)
-                self.add_font("MSJH", "B", font_path, uni=True)
-                self.base_font = "MSJH"
-            except Exception:
-                # 若字體註冊失敗，退回到內建字型
-                self.base_font = "Helvetica"
+            font_path_b = system_font_path_b if os.path.exists(system_font_path_b) else font_path
         else:
-            # 找不到字體時使用備援內建字型，並在 UI 顯示提示（非阻斷）
-            self.base_font = "Helvetica"
-            try:
-                st.warning("系統找不到微軟正黑體 (msjh.ttc)。已使用備援字型輸出 PDF。")
-            except Exception:
-                pass
+            font_path = None
+            st.error("系統找不到微軟正黑體 (MSJH.TTC)，請確保專案根目錄中包含此字體檔案。")
+        
+        if font_path:
+            self.add_font("MSJH", "", font_path)
+            self.add_font("MSJH", "B", font_path_b)
         
         self.set_auto_page_break(auto=True, margin=10)
         self.set_margins(10, 10, 10) # 左右上下邊距都設為 10mm
@@ -86,23 +70,23 @@ class TacticalPDF(FPDF):
 
     def header(self):
         # 頁首
-        self.set_font(self.base_font, "", 10)
+        self.set_font("MSJH", "", 10)
         self.set_text_color(100, 100, 100)
         self.cell(0, 8, f"全台房產成交策略引擎 - 專家級戰術報告 | 物件：{self.property_name}", border=0, ln=1, align="L")
         self.ln(1)
 
     def footer(self):
-        # 頁尾 - 僅顯示頁碼
+        # 頁尾
         self.set_y(-12)
-        self.set_font(self.base_font, "", 8)
+        self.set_font("MSJH", "", 8)
         self.set_text_color(100, 100, 100)
-        page_num = f"第 {self.page_no()} 頁"
+        page_num = f"第 {self.page_no()} 頁 | 數據需人工確認"
         self.cell(0, 8, page_num, 0, 0, "C")
 
     def section_title(self, title):
         # 標題樣式：13pt 加粗，下方加一條橫線
         self.ln(2)
-        self.set_font(self.base_font, "B", 13)
+        self.set_font("MSJH", "B", 13)
         self.set_text_color(0, 51, 102) # 深藍色文字
         self.cell(0, 7, title, ln=1)
         
@@ -115,7 +99,7 @@ class TacticalPDF(FPDF):
 
     def add_authoritative_paragraph(self, text):
         # 壓縮排版：字體降至 10pt，行高降至 5.5
-        self.set_font(self.base_font, "", 10)
+        self.set_font("MSJH", "", 10)
         
         # 過濾 Emoji 與標籤
         clean_text = filter_plain_text(text)
@@ -134,7 +118,7 @@ class TacticalPDF(FPDF):
     def add_contact_box(self, name="__________", phone="__________"):
         """在末尾加入商用聯繫區"""
         self.ln(3)
-        self.set_font(self.base_font, "B", 9)
+        self.set_font("MSJH", "B", 9)
         self.set_text_color(100, 100, 100)
         self.cell(0, 5, "--------------------------------------------------------------------------------", ln=1, align="R")
         self.cell(0, 5, f"業務聯繫人：{name} / 電話：{phone}", ln=1, align="R")
@@ -143,23 +127,18 @@ class TacticalPDF(FPDF):
 
 def build_prompt(property_description: str) -> str:
     return (
-        f"你是一位高成交導向的房仲銷售顧問。請根據以下物件資訊，嚴格依照此六段式骨架撰寫文案，禁止廢話：\n\n"
-        "一句抓眼球的標題：要包含地標或最大優勢，如「[行政區]稀缺低總價，首購首選」。\n\n"
-        "一句最強差異：直接點出這間房跟同區其他物件不一樣的特點。\n\n"
-        "三個買方在意的理由：針對物件優勢條列，如「1. 步行5分鐘進捷運；2. 永久景觀棟距；3. 屋主誠售可議」。\n\n"
-        "一段生活場景：用描寫式文字寫出居住感，例如「下班回家下樓就有公園，回家不用找車位」。\n\n"
-        "一段完整規格：必須清楚列出「坪數、格局、樓層、管理費、車位類型」，若資訊不足請標示「未提供」。\n\n"
-        "一個明確邀請：結尾強制寫「本週僅釋出 3 組帶看名額，歡迎私訊看照片並預約賞屋時段」。\n\n"
-        "【執行規則】\n\n"
-        "1. 文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。\n\n"
-        "2. 【硬性禁止】絕對禁止輸出任何內部筆記、狀態提示、檢查備註（例如：數據需人工確認、等待核對、文案生成中）。\n\n"
-        "3. 【禁輸出後台評級】絕對禁止輸出任何系統排名、網站人氣榜、熱門度標籤（例如：嚴禁出現『南港人氣榜第3名』或類似排名文字）。買方需要的是稀缺價值，而非網購熱銷標籤。\n\n"
-        "4. 【規格場景化】在描寫生活場景與買方理由時，請將冰冷的物理限制（如：超低建蔽率）轉譯為買方聽得懂的語言（例如：『低建蔽率，把大片綠意留給中庭，回家就是真正的放鬆』），不要直接平鋪直敘堆砌百分比數字。\n\n"
-        "5. 【誠實原則】若資料缺失，請精準標示「未提供」即可，禁止輸出任何關於系統或數據狀態的描述。\n\n"
-        "6. 【直接產出】你的輸出必須直接作為最終交付給客戶的內容，不要包含任何自我解釋、道歉或備註。\n\n"
-        f"待處理資訊：{property_description}"
+        "你是一位高成交導向的房仲銷售顧問。現在執行『極致 MVP 收斂』策略，嚴禁幻覺。\n\n"
+        "【防幻覺協議】：\n"
+        "1. 嚴禁推理行情：禁止估算區域均價、禁止計算價差百分比、禁止提到『低於行情幾%』。\n"
+        "2. 數據絕對一致：文案中所有數字（總價、單價、坪數、樓層、車位費）必須與輸入資訊 100% 相同，嚴禁發散。\n"
+        "3. 物理數據優先：只使用輸入資訊中明確提到的地段、格局、建材、設施。\n\n"
+        "輸出結構必須嚴格包含以下 4 個區塊，標籤文字必須完全一致：\n"
+        "【物件核心規格與黃金價值】：請在此處條列式列出物件最真實的物理優勢（地段、坪效、格局、車位）。\n"
+        "【591 專業優化版】：針對 591 平台優化的權威房屋描述。\n"
+        "【FB 社團吸粉版】：強力 Hook、口語化、吸睛特點。\n"
+        "【LINE/限動秒殺版】：不超過 100 字，強調稀缺與真實數據。\n\n"
+        f"待處理真實資訊：{property_description}"
     )
-
 
 def resolve_input_text(user_input: str) -> tuple[str, str]:
     if "591.com.tw" not in user_input:
@@ -179,8 +158,7 @@ def resolve_input_text(user_input: str) -> tuple[str, str]:
         return "", ""
 
 def sanitize_filename(value: str) -> str:
-    # 移除不安全的檔案名字元：\ / : * ? " < > | ( ) [ ] { }
-    cleaned = re.sub(r"[\\/:*?\"<>|()[\]{}]", "_", value)
+    cleaned = re.sub(r"[\\/:*?\"<>|]", "_", value)
     cleaned = re.sub(r"\s+", "_", cleaned).strip("_")
     return cleaned or "物件"
 
@@ -196,12 +174,12 @@ def extract_sections(content: str) -> dict[str, str]:
         "LINE版": "",
     }
     
-    # 更新切割邏輯以對應新 Prompt
+    # 更新切割邏輯，支援多種變體
     patterns = {
-        "核心規格": r"【?物件核心規格與黃金價值】?",
-        "591版": r"【?591.*?(專業|優化)?.*?版】?",
-        "FB版": r"【?FB\s*(社團|吸粉).*?版】?",
-        "LINE版": r"【?LINE.*?(限動|秒殺)?.*?版】?",
+        "核心規格": r"(【?物件核心規格與黃金價值】?)",
+        "591版": r"(【?591\s*(專業)?(優化)?版】?)",
+        "FB版": r"(【?FB\s*(社團)?(吸粉)?版】?)",
+        "LINE版": r"(【?LINE\s*(/限動)?(秒殺)?版】?)",
     }
     
     lines = content.splitlines()
@@ -209,27 +187,23 @@ def extract_sections(content: str) -> dict[str, str]:
     
     for line in lines:
         line_strip = line.strip().replace("*", "").replace("#", "")
-        if not line_strip: 
-            continue
+        if not line_strip: continue
         
-        # 檢查是否為標題行（標題應在行首）
         found_header = False
         for key, pattern in patterns.items():
-            if re.match(pattern, line_strip, re.IGNORECASE):
-                current_key = key
-                found_header = True
-                
-                # 若標題和內容在同一行，提取標題後的內容
-                # 例：「【591專業優化版】這是內容」
-                match = re.search(pattern, line_strip, re.IGNORECASE)
-                if match:
-                    after_header = line_strip[match.end():].strip()
-                    if after_header:
-                        sections[current_key] += after_header + "\n"
-                break
+            if re.search(pattern, line_strip, re.IGNORECASE):
+                if len(line_strip) < 50:
+                    current_key = key
+                    found_header = True
+                    break
         
-        if not found_header and current_key:
-            # 非標題行且已設定當前區塊，將該行加入當前區塊
+        if found_header: continue
+        
+        # 排除包含提示詞的行
+        if any(hint in line_strip for hint in ["請在此處條列", "針對 591 平台", "強力 Hook", "不超過 100 字"]):
+            continue
+            
+        if current_key:
             sections[current_key] += line + "\n"
             
     return sections
@@ -282,65 +256,42 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     # 第一頁：物件核心規格與黃金價值
     pdf.add_page()
     pdf.section_title("【物件核心規格與黃金價值】")
-    spec_text = sections["核心規格"].strip()
-    if spec_text:
-        for line in spec_text.splitlines():
-            if line.strip(): 
-                pdf.add_authoritative_paragraph(line.strip())
-    else:
-        pdf.add_authoritative_paragraph("（物件信息處理中，敬請稍候...）")
+    spec_text = sections["核心規格"].strip() or "（真實物理數據讀取中...）"
+    for line in spec_text.splitlines():
+        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
     
     # 第二頁：全渠道成交戰術文案
     pdf.add_page()
     pdf.section_title("【全渠道成交戰術文案】")
     
     # 591 優化版
-    pdf.set_font(pdf.base_font, "B", 11)
+    pdf.set_font("MSJH", "B", 11)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ 591 專業描述優化版", ln=1)
     pdf.set_text_color(0, 0, 0)
-    text_591 = sections["591版"].strip()
-    if text_591:
-        # 591版通常包含標題和內文，按行呈現
-        for line in text_591.splitlines():
-            if line.strip():
-                # 判斷是否為標題行（包含「標題：」或「內文：」）
-                if line.strip().startswith("標題：") or line.strip().startswith("內文："):
-                    pdf.set_font(pdf.base_font, "B", 10)
-                    pdf.add_authoritative_paragraph(line.strip())
-                    pdf.set_font(pdf.base_font, "", 10)
-                else:
-                    pdf.add_authoritative_paragraph(line.strip())
-    else:
-        pdf.add_authoritative_paragraph("（591版文案生成中...）")
+    text_591 = sections["591版"].strip() or "（文案生成中...）"
+    for line in text_591.splitlines():
+        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
     
     # FB 版
     pdf.ln(1)
-    pdf.set_font(pdf.base_font, "B", 11)
+    pdf.set_font("MSJH", "B", 11)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ FB 社團爆款版", ln=1)
     pdf.set_text_color(0, 0, 0)
-    text_fb = sections["FB版"].strip()
-    if text_fb:
-        for line in text_fb.splitlines():
-            if line.strip(): 
-                pdf.add_authoritative_paragraph(line.strip())
-    else:
-        pdf.add_authoritative_paragraph("（FB爆款文案生成中...）")
+    text_fb = sections["FB版"].strip() or "（文案生成中...）"
+    for line in text_fb.splitlines():
+        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
     
     # LINE 版
     pdf.ln(1)
-    pdf.set_font(pdf.base_font, "B", 11)
+    pdf.set_font("MSJH", "B", 11)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ LINE / 限動秒殺版", ln=1)
     pdf.set_text_color(0, 0, 0)
-    text_line = sections["LINE版"].strip()
-    if text_line:
-        for line in text_line.splitlines():
-            if line.strip(): 
-                pdf.add_authoritative_paragraph(line.strip())
-    else:
-        pdf.add_authoritative_paragraph("（限動文案生成中...）")
+    text_line = sections["LINE版"].strip() or "（文案生成中...）"
+    for line in text_line.splitlines():
+        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
     
     # 末尾聯繫區
     pdf.ln(1)
@@ -350,10 +301,7 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     output_dir = os.path.join(os.getcwd(), "Outputs")
     os.makedirs(output_dir, exist_ok=True)
     
-    # 以記憶體 bytes 輸出 PDF（確保在 fpdf2 上回傳 bytes）
-    pdf_bytes = pdf.output(dest='S')
-    if isinstance(pdf_bytes, str):
-        pdf_bytes = pdf_bytes.encode('latin-1')
+    pdf_bytes = pdf.output()
     with open(os.path.join(output_dir, filename), "wb") as f:
         f.write(pdf_bytes)
     
