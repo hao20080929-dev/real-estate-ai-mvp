@@ -45,20 +45,40 @@ class TacticalPDF(FPDF):
         super().__init__()
         self.property_name = property_name
         # 註冊字體 (優先讀取專案目錄下的 msjh.ttc 以支援雲端部署)
-        local_font_path = "msjh.ttc"
+        # 嘗試多種可能的字體檔名（大小寫與粗體檔）以提高相容性
+        candidate_fonts = [
+            "msjh.ttc",
+            "MSJH.TTC",
+            "MSJHBD.TTC",
+            "MSJHL.TTC",
+        ]
         system_font_path = r"C:\Windows\Fonts\msjh.ttc"
-        
-        if os.path.exists(local_font_path):
-            font_path = local_font_path
-        elif os.path.exists(system_font_path):
+
+        font_path = None
+        for fn in candidate_fonts:
+            if os.path.exists(fn):
+                font_path = fn
+                break
+
+        if not font_path and os.path.exists(system_font_path):
             font_path = system_font_path
-        else:
-            font_path = None
-            st.error("系統找不到微軟正黑體 (msjh.ttc)，請確保專案根目錄中包含此字體檔案。")
-        
+
         if font_path:
-            self.add_font("MSJH", "", font_path)
-            self.add_font("MSJH", "B", font_path)
+            # 使用 uni=True 確保支援多國字元
+            try:
+                self.add_font("MSJH", "", font_path, uni=True)
+                self.add_font("MSJH", "B", font_path, uni=True)
+                self.base_font = "MSJH"
+            except Exception:
+                # 若字體註冊失敗，退回到內建字型
+                self.base_font = "Helvetica"
+        else:
+            # 找不到字體時使用備援內建字型，並在 UI 顯示提示（非阻斷）
+            self.base_font = "Helvetica"
+            try:
+                st.warning("系統找不到微軟正黑體 (msjh.ttc)。已使用備援字型輸出 PDF。")
+            except Exception:
+                pass
         
         self.set_auto_page_break(auto=True, margin=10)
         self.set_margins(10, 10, 10) # 左右上下邊距都設為 10mm
@@ -66,7 +86,7 @@ class TacticalPDF(FPDF):
 
     def header(self):
         # 頁首
-        self.set_font("MSJH", "", 10)
+        self.set_font(self.base_font, "", 10)
         self.set_text_color(100, 100, 100)
         self.cell(0, 8, f"全台房產成交策略引擎 - 專家級戰術報告 | 物件：{self.property_name}", border=0, ln=1, align="L")
         self.ln(1)
@@ -74,7 +94,7 @@ class TacticalPDF(FPDF):
     def footer(self):
         # 頁尾
         self.set_y(-12)
-        self.set_font("MSJH", "", 8)
+        self.set_font(self.base_font, "", 8)
         self.set_text_color(100, 100, 100)
         page_num = f"第 {self.page_no()} 頁 | 數據需人工確認"
         self.cell(0, 8, page_num, 0, 0, "C")
@@ -82,7 +102,7 @@ class TacticalPDF(FPDF):
     def section_title(self, title):
         # 標題樣式：13pt 加粗，下方加一條橫線
         self.ln(2)
-        self.set_font("MSJH", "B", 13)
+        self.set_font(self.base_font, "B", 13)
         self.set_text_color(0, 51, 102) # 深藍色文字
         self.cell(0, 7, title, ln=1)
         
@@ -95,7 +115,7 @@ class TacticalPDF(FPDF):
 
     def add_authoritative_paragraph(self, text):
         # 壓縮排版：字體降至 10pt，行高降至 5.5
-        self.set_font("MSJH", "", 10)
+        self.set_font(self.base_font, "", 10)
         
         # 過濾 Emoji 與標籤
         clean_text = filter_plain_text(text)
@@ -114,7 +134,7 @@ class TacticalPDF(FPDF):
     def add_contact_box(self, name="__________", phone="__________"):
         """在末尾加入商用聯繫區"""
         self.ln(3)
-        self.set_font("MSJH", "B", 9)
+        self.set_font(self.base_font, "B", 9)
         self.set_text_color(100, 100, 100)
         self.cell(0, 5, "--------------------------------------------------------------------------------", ln=1, align="R")
         self.cell(0, 5, f"業務聯繫人：{name} / 電話：{phone}", ln=1, align="R")
@@ -256,7 +276,7 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     pdf.section_title("【全渠道成交戰術文案】")
     
     # 591 優化版
-    pdf.set_font("MSJH", "B", 11)
+    pdf.set_font(pdf.base_font, "B", 11)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ 591 專業描述優化版", ln=1)
     pdf.set_text_color(0, 0, 0)
@@ -266,7 +286,7 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     
     # FB 版
     pdf.ln(1)
-    pdf.set_font("MSJH", "B", 11)
+    pdf.set_font(pdf.base_font, "B", 11)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ FB 社團爆款版", ln=1)
     pdf.set_text_color(0, 0, 0)
@@ -276,7 +296,7 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     
     # LINE 版
     pdf.ln(1)
-    pdf.set_font("MSJH", "B", 11)
+    pdf.set_font(pdf.base_font, "B", 11)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ LINE / 限動秒殺版", ln=1)
     pdf.set_text_color(0, 0, 0)
@@ -292,7 +312,10 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     output_dir = os.path.join(os.getcwd(), "Outputs")
     os.makedirs(output_dir, exist_ok=True)
     
-    pdf_bytes = pdf.output()
+    # 以記憶體 bytes 輸出 PDF（確保在 fpdf2 上回傳 bytes）
+    pdf_bytes = pdf.output(dest='S')
+    if isinstance(pdf_bytes, str):
+        pdf_bytes = pdf_bytes.encode('latin-1')
     with open(os.path.join(output_dir, filename), "wb") as f:
         f.write(pdf_bytes)
     
