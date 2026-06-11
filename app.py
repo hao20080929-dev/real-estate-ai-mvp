@@ -148,13 +148,32 @@ def build_prompt(property_description: str) -> str:
         "\n1. 嚴禁推理行情：禁止估算區域均價、禁止計算價差百分比、禁止提到『低於行情幾%』。"
         "\n2. 數據絕對一致：文案中所有數字（總價、單價、坪數、樓層、車位費）必須與輸入資訊 100% 相同，嚴禁發散。"
         "\n3. 物理數據優先：只使用輸入資訊中明確提到的地段、格局、建材、設施。"
-        "\n\n輸出結構必須包含以下 4 個區塊（以便系統解析）："
-        "\n1. 【物件核心規格與黃金價值】：條列式列出物件最真實的物理優勢（地段、坪效、格局、車位）。"
-        "\n2. 【591 專業優化版】：針對 591 平台優化的權威房屋描述。"
-        "\n3. 【FB 社團吸粉版】：強力 Hook、口語化、吸睛特點。"
-        "\n4. 【LINE/限動秒殺版】：不超過 100 字，強調稀缺與真實數據。"
-        f"\n\n待處理真實資訊：{property_description}"
+        "\n\n【輸出結構必須完全符合以下 4 個區塊（系統依此解析提取）】"
+        "\n\n【物件核心規格與黃金價值】"
+        "\n條列式列出物件最真實的物理優勢，包括但不限於："
+        "\n- 精準地段"
+        "\n- 物理規格（樓層、面積、建蔽率、公設比等）"
+        "\n- 戶數規劃"
+        "\n- 在售格局"
+        "\n- 定價與車位"
+        "\n- 營運維護"
+        "\n- 周邊配套"
+        "\n\n【591 專業優化版】"
+        "\n必須包含以下兩部分，請嚴格按照格式："
+        "\n標題：（一行，濃縮房屋核心賣點，包含格局、坪數、重點特色，用 | 符號分隔多個重點）"
+        "\n內文：（多行詳細描述，針對 591 平台優化，專業權威風格）"
+        "\n\n【FB 社團吸粉版】"
+        "\n強力 Hook、口語化、吸睛特點，多行分段，強調獨特賣點與緊迫感"
+        "\n\n【LINE/限動秒殺版】"
+        "\n精簡版本，不超過 100 字，強調稀缺與真實數據，適合限時優惠"
+        "\n\n【重要提醒】"
+        "\n- 每個區塊標題前後必須加上【】符號（例如【物件核心規格與黃金價值】）"
+        "\n- 591 版的『標題：』和『內文：』標記必須明確出現"
+        "\n- 不要省略任何區塊，必須完整輸出全部 4 個區塊"
+        "\n- 所有數據必須 100% 基於輸入資訊，嚴禁編造與推測"
+        f"\n\n=== 待處理真實資訊 ===\n{property_description}"
     )
+
 
 def resolve_input_text(user_input: str) -> tuple[str, str]:
     if "591.com.tw" not in user_input:
@@ -277,9 +296,13 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     # 第一頁：物件核心規格與黃金價值
     pdf.add_page()
     pdf.section_title("【物件核心規格與黃金價值】")
-    spec_text = sections["核心規格"].strip() or "（真實物理數據讀取中...）"
-    for line in spec_text.splitlines():
-        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
+    spec_text = sections["核心規格"].strip()
+    if spec_text:
+        for line in spec_text.splitlines():
+            if line.strip(): 
+                pdf.add_authoritative_paragraph(line.strip())
+    else:
+        pdf.add_authoritative_paragraph("（物件信息處理中，敬請稍候...）")
     
     # 第二頁：全渠道成交戰術文案
     pdf.add_page()
@@ -290,9 +313,20 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ 591 專業描述優化版", ln=1)
     pdf.set_text_color(0, 0, 0)
-    text_591 = sections["591版"].strip() or "（文案生成中...）"
-    for line in text_591.splitlines():
-        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
+    text_591 = sections["591版"].strip()
+    if text_591:
+        # 591版通常包含標題和內文，按行呈現
+        for line in text_591.splitlines():
+            if line.strip():
+                # 判斷是否為標題行（包含「標題：」或「內文：」）
+                if line.strip().startswith("標題：") or line.strip().startswith("內文："):
+                    pdf.set_font(pdf.base_font, "B", 10)
+                    pdf.add_authoritative_paragraph(line.strip())
+                    pdf.set_font(pdf.base_font, "", 10)
+                else:
+                    pdf.add_authoritative_paragraph(line.strip())
+    else:
+        pdf.add_authoritative_paragraph("（591版文案生成中...）")
     
     # FB 版
     pdf.ln(1)
@@ -300,9 +334,13 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ FB 社團爆款版", ln=1)
     pdf.set_text_color(0, 0, 0)
-    text_fb = sections["FB版"].strip() or "（文案生成中...）"
-    for line in text_fb.splitlines():
-        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
+    text_fb = sections["FB版"].strip()
+    if text_fb:
+        for line in text_fb.splitlines():
+            if line.strip(): 
+                pdf.add_authoritative_paragraph(line.strip())
+    else:
+        pdf.add_authoritative_paragraph("（FB爆款文案生成中...）")
     
     # LINE 版
     pdf.ln(1)
@@ -310,9 +348,13 @@ def save_pdf(title: str, content: str, contact_name: str = "__________", contact
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 6, "◆ LINE / 限動秒殺版", ln=1)
     pdf.set_text_color(0, 0, 0)
-    text_line = sections["LINE版"].strip() or "（文案生成中...）"
-    for line in text_line.splitlines():
-        if line.strip(): pdf.add_authoritative_paragraph(line.strip())
+    text_line = sections["LINE版"].strip()
+    if text_line:
+        for line in text_line.splitlines():
+            if line.strip(): 
+                pdf.add_authoritative_paragraph(line.strip())
+    else:
+        pdf.add_authoritative_paragraph("（限動文案生成中...）")
     
     # 末尾聯繫區
     pdf.ln(1)
