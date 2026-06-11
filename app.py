@@ -174,7 +174,8 @@ def resolve_input_text(user_input: str) -> tuple[str, str]:
         return "", ""
 
 def sanitize_filename(value: str) -> str:
-    cleaned = re.sub(r"[\\/:*?\"<>|]", "_", value)
+    # 移除不安全的檔案名字元：\ / : * ? " < > | ( ) [ ] { }
+    cleaned = re.sub(r"[\\/:*?\"<>|()[\]{}]", "_", value)
     cleaned = re.sub(r"\s+", "_", cleaned).strip("_")
     return cleaned or "物件"
 
@@ -192,10 +193,10 @@ def extract_sections(content: str) -> dict[str, str]:
     
     # 更新切割邏輯以對應新 Prompt
     patterns = {
-        "核心規格": r"(【?物件核心規格與黃金價值】?)",
-        "591版": r"(【?591\s*(專業)?(優化)?版】?)",
-        "FB版": r"(【?FB\s*(社團)?(吸粉)?版】?)",
-        "LINE版": r"(【?LINE\s*(/限動)?(秒殺)?版】?)",
+        "核心規格": r"【?物件核心規格與黃金價值】?",
+        "591版": r"【?591.*?(專業|優化)?.*?版】?",
+        "FB版": r"【?FB\s*(社團|吸粉).*?版】?",
+        "LINE版": r"【?LINE.*?(限動|秒殺)?.*?版】?",
     }
     
     lines = content.splitlines()
@@ -203,18 +204,27 @@ def extract_sections(content: str) -> dict[str, str]:
     
     for line in lines:
         line_strip = line.strip().replace("*", "").replace("#", "")
-        if not line_strip: continue
+        if not line_strip: 
+            continue
         
+        # 檢查是否為標題行（標題應在行首）
         found_header = False
         for key, pattern in patterns.items():
-            if re.search(pattern, line_strip, re.IGNORECASE):
-                if len(line_strip) < 40: # 標題通常較短
-                    current_key = key
-                    found_header = True
-                    break
+            if re.match(pattern, line_strip, re.IGNORECASE):
+                current_key = key
+                found_header = True
+                
+                # 若標題和內容在同一行，提取標題後的內容
+                # 例：「【591專業優化版】這是內容」
+                match = re.search(pattern, line_strip, re.IGNORECASE)
+                if match:
+                    after_header = line_strip[match.end():].strip()
+                    if after_header:
+                        sections[current_key] += after_header + "\n"
+                break
         
-        if found_header: continue
-        if current_key:
+        if not found_header and current_key:
+            # 非標題行且已設定當前區塊，將該行加入當前區塊
             sections[current_key] += line + "\n"
             
     return sections
