@@ -92,11 +92,11 @@ class TacticalPDF(FPDF):
         self.ln(1)
 
     def footer(self):
-        # 頁尾
+        # 頁尾 - 僅顯示頁碼
         self.set_y(-12)
         self.set_font(self.base_font, "", 8)
         self.set_text_color(100, 100, 100)
-        page_num = f"第 {self.page_no()} 頁 | 數據需人工確認"
+        page_num = f"第 {self.page_no()} 頁"
         self.cell(0, 8, page_num, 0, 0, "C")
 
     def section_title(self, title):
