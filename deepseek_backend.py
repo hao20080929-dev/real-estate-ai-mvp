@@ -264,6 +264,67 @@ def save_docx(title: str, content: str) -> str:
     region, property_name = extract_region_and_name(title, intel_section[:12])
     set_header_footer(document, property_name)
 
+    # --- 強制清理 header/footer 與文件內任何殘留禁止字詞 ---
+    banned_variants = [
+        "數據需人工確認",
+        "數據需人中確認",
+        "真實物理數據讀取中",
+        "等待人工核對",
+        "待 AI 解析",
+        "⚠️ 數據需人工確認",
+        "需人工確認",
+        "人工確認",
+    ]
+
+    for section in document.sections:
+        # header
+        hdr = section.header
+        for p in hdr.paragraphs:
+            for run in list(p.runs):
+                text = run.text or ""
+                for bad in banned_variants:
+                    if bad in text:
+                        text = text.replace(bad, "")
+                run.text = text
+        # footer
+        ftr = section.footer
+        for p in ftr.paragraphs:
+            for run in list(p.runs):
+                text = run.text or ""
+                for bad in banned_variants:
+                    if bad in text:
+                        text = text.replace(bad, "")
+                run.text = text
+
+    # 清除正文每個段落與 run 中的 banned 字詞
+    for paragraph in document.paragraphs:
+        for run in list(paragraph.runs):
+            text = run.text or ""
+            for bad in banned_variants:
+                if bad in text:
+                    text = text.replace(bad, "")
+            run.text = text
+
+    # 清除表格內的 banned 字詞（每個 cell 每個段落）
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for run in list(p.runs):
+                        text = run.text or ""
+                        for bad in banned_variants:
+                            if bad in text:
+                                text = text.replace(bad, "")
+                        run.text = text
+
+    # 最後在 content 字串上再做一次防護
+    for bad in banned_variants:
+        content = content.replace(bad, "")
+    content = re.sub(r"\n\s*\n+", "\n\n", content)
+    cleaned_content = clean_markdown(content)
+    intel_section = clean_markdown(extract_intel_section(cleaned_content))
+    sections = extract_sections(cleaned_content)
+
     document.add_heading("行情深度偵察", level=1)
     document.add_paragraph("#行情對比 #抗跌 #稀缺")
     table = document.add_table(rows=2, cols=2)
