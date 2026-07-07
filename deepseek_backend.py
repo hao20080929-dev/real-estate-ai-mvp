@@ -19,18 +19,29 @@ time.sleep(2)
 
 def build_prompt(property_description: str) -> str:
     return (
-        f"你是一位高成交導向的房仲銷售顧問。請根據以下物件資訊，嚴格依照此六段式骨架撰寫文案，禁止廢話：\n\n"
-        "一句抓眼球的標題：要包含地標或最大優勢，如「[行政區]稀缺低總價，首購首選」。\n\n"
-        "一句最強差異：直接點出這間房跟同區其他物件不一樣的特點。\n\n"
-        "三個買方在意的理由：針對物件優勢條列，如「1. 步行5分鐘進捷運；2. 永久景觀棟距；3. 屋主誠售可議」。\n\n"
-        "一段生活場景：用描寫式文字寫出居住感，例如「下班回家下樓就有公園，回家不用找車位」。\n\n"
-        "一段完整規格：必須清楚列出「坪數、格局、樓層、管理費、車位類型」，若資訊不足請標示「未提供」。\n\n"
-        "一個明確邀請：結尾強制寫「本週僅釋出 3 組帶看名額，歡迎私訊看照片並預約賞屋時段」。\n\n"
-        "【執行規則】\n\n"
-        "1. 文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。\n\n"
-        "2. 【硬性禁止】絕對禁止輸出任何內部筆記、狀態提示、檢查備註（例如：數據需人工確認、等待核對、讀取中、文案生成中）。\n\n"
-        "3. 【誠實原則】若資料缺失，請直接標示「未提供」即可，禁止輸出任何關於系統或數據狀態的描述。\n\n"
-        "4. 【直接產出】你的輸出必須直接作為最終交付給客戶的內容，不要包含對系統的對話或備註。\n\n"
+        f"你是一位高成交導向的房仲銷售顧問。請根據以下物件資訊，精準產出三個渠道的銷售文案與一個規格解析。\n\n"
+        "【輸出格式要求】\n"
+        "你必須嚴格依序輸出以下四個標籤區塊，不可遺漏，且標籤文字必須完全一致：\n\n"
+        "物件規格解析\n"
+        "(請在此處條列物件的精準地段、建築規劃、公設比、在售格局、定價與車位、管理費與完工日期等核心數據。若資料缺失請標示「未提供」)\n\n"
+        "【591 專業版】\n"
+        "(請根據以下六段式骨架撰寫：\n"
+        "1. 一句抓眼球的標題：要包含地標或最大優勢。\n"
+        "2. 一句最強差異：直接點出這間房跟同區其他物件不一樣的特點。\n"
+        "3. 三個買方在意的理由：針對物件優勢條列。\n"
+        "4. 一段生活場景：用描寫式文字寫出居住感。\n"
+        "5. 一段完整規格：列出坪數、格局、樓層、管理費、車位類型，缺一不可，不足標示「未提供」。\n"
+        "6. 一個明確邀請：結尾強制寫「本週僅釋出 3 組帶看名額，歡迎私訊看照片並預約賞屋時段」。)\n\n"
+        "【FB 社團吸粉版】\n"
+        "(請將上述六段式核心轉譯為適合 Facebook 轉發、具備高社群感染力、口語化且精簡的爆款文案，同樣必須包含明確邀請結尾。)\n\n"
+        "【LINE/限動秒殺版】\n"
+        "(請將核心資訊極度精簡壓縮，適合 LINE 群組與限時動態秒殺快速閱讀，同樣必須包含明確邀請結尾。)\n\n"
+        "【執行規則】\n"
+        "1. 文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。\n"
+        "2. 【硬性禁止】絕對禁止輸出任何內部筆記、狀態提示、檢查備註（例如：數據需人工確認、等待核對、文案生成中）。\n"
+        "3. 【禁輸出後台評級】絕對禁止輸出任何系統排名、網站人氣榜、熱門度標籤（例如：嚴禁出現『南港人氣榜第3名』或類似排名文字）。\n"
+        "4. 【規格場景化】在描寫生活場景與買方理由時，請將冰冷的物理限制（如：超低建蔽率）轉譯為買方聽得懂的畫面（例如：『低建蔽率，把大片綠意留給中庭，回家就是真正的放鬆』），不要直接平鋪直敘堆砌百分比數字。\n"
+        "5. 【直接產出】你的輸出必須直接作為最終交付給客戶的內容，不要包含任何自我解釋、道歉或備註。\n\n"
         f"待處理資訊：{property_description}"
     )
 
@@ -61,20 +72,36 @@ def split_inputs(raw_input: str) -> list[str]:
     return [item.strip() for item in parts if item.strip()]
 
 
+def extract_intel_section(content: str) -> str:
+    """模糊匹配物件規格解析區塊"""
+    markers = ["物件規格解析", "【物件核心規格與黃金價值】", "物件規格", "規格解析"]
+    for marker in markers:
+        start_index = content.find(marker)
+        if start_index != -1:
+            # 截取到下一個大區塊之前
+            end_index = content.find("【591", start_index)
+            if end_index != -1:
+                return content[start_index:end_index]
+            return content[start_index:]
+    return content[:1000]
+
+
 def extract_sections(content: str) -> dict[str, str]:
+    """使用模糊的正則表達式來切分三個版本的文案，徹底解決標籤對不上的問題"""
     sections = {
         "【591 專業版】": "",
         "【FB 社團吸粉版】": "",
         "【LINE/限動秒殺版】": "",
     }
-    current_key = None
-    for line in content.splitlines():
-        line_strip = line.strip()
-        if line_strip in sections:
-            current_key = line_strip
-            continue
-        if current_key:
-            sections[current_key] += line + "\n"
+    
+    p591 = re.search(r"(591\s*專業描述優化版|591\s*專業版|591\s*精簡版|【591 專業版】)(.*?)(?=◆FB|【FB|◆LINE|【LINE|◆限動|$)", content, re.DOTALL | re.IGNORECASE)
+    pfb = re.search(r"(FB\s*社團爆款版|FB\s*社團|FB\s*爆款|【FB 社團吸粉版】)(.*?)(?=◆LINE|【LINE|◆限動|$)", content, re.DOTALL | re.IGNORECASE)
+    pline = re.search(r"(LINE\s*/\s*限動秒殺版|LINE\s*限動|LINE|限動|【LINE/限動秒殺版】)(.*?)$", content, re.DOTALL | re.IGNORECASE)
+    
+    if p591: sections["【591 專業版】"] = p591.group(2).strip()
+    if pfb: sections["【FB 社團吸粉版】"] = pfb.group(2).strip()
+    if pline: sections["【LINE/限動秒殺版】"] = pline.group(2).strip()
+    
     return sections
 
 
@@ -90,16 +117,6 @@ def filter_generic_landmarks(lines: list[str]) -> list[str]:
 
 def limit_lines(lines: list[str], max_lines: int) -> list[str]:
     return lines[:max_lines]
-
-
-def extract_intel_section(content: str) -> str:
-    # adapt to new client-facing section title
-    start_marker = "物件規格解析"
-    start_index = content.find(start_marker)
-    if start_index == -1:
-        return content
-    # return from that marker to next major section if exists
-    return content[start_index:]
 
 
 def clean_markdown(text: str) -> str:
@@ -275,47 +292,26 @@ def generate_listing(client: genai.Client, property_description: str) -> str:
 
 
 def save_docx(title: str, content: str) -> str:
-    # Remove all internal verification prompts first
+    # 1. 徹底清洗與過濾內部提示
     content = remove_internal_prompts(content)
-    
-    # Collapse multiple blank lines
     content = re.sub(r"\n\s*\n+", "\n\n", content)
-
-    output_dir = os.path.join(os.getcwd(), "Outputs")
-    os.makedirs(output_dir, exist_ok=True)
-    
     cleaned_content = clean_markdown(content)
-    # Ensure no internal prompts in cleaned content
     cleaned_content = remove_internal_prompts(cleaned_content)
     
-    # Prefer client-facing section title
+    # 2. 提取區塊
     intel_section = clean_markdown(extract_intel_section(cleaned_content))
     intel_section = remove_internal_prompts(intel_section)
-    
     sections = extract_sections(cleaned_content)
+    
+    output_dir = os.path.join(os.getcwd(), "Outputs")
+    os.makedirs(output_dir, exist_ok=True)
     
     document = Document()
     apply_styles(document)
     region, property_name = extract_region_and_name(title, intel_section[:12])
     set_header_footer(document, property_name)
 
-    # Ensure no internal prompts exist in header/footer
-    for section in document.sections:
-        for p in section.header.paragraphs:
-            for run in list(p.runs):
-                run.text = remove_internal_prompts(run.text or "")
-        for p in section.footer.paragraphs:
-            for run in list(p.runs):
-                run.text = remove_internal_prompts(run.text or "")
-
-    # Final cleanup of content
-    cleaned_content = remove_internal_prompts(cleaned_content)
-    cleaned_content = re.sub(r"\n\s*\n+", "\n\n", cleaned_content)
-    intel_section = clean_markdown(extract_intel_section(cleaned_content))
-    intel_section = remove_internal_prompts(intel_section)
-    sections = extract_sections(cleaned_content)
-
-    # Client-facing heading
+    # 3. 物件規格解析頁面
     document.add_heading("物件規格解析", level=1)
     document.add_paragraph("#物件規格 #市場解析 #銷售要點")
     table = document.add_table(rows=2, cols=2)
@@ -323,18 +319,18 @@ def save_docx(title: str, content: str) -> str:
     table.cell(0, 1).text = "區域行情"
     table.cell(1, 0).text = "價差判讀"
     table.cell(1, 1).text = "詳見下方說明"
-    intel_lines = limit_lines(filter_generic_landmarks(intel_section.splitlines()), 12)
+    
+    intel_lines = limit_lines(filter_generic_landmarks(intel_section.splitlines()), 15)
     for line in intel_lines:
         line_strip = line.strip()
-        if line_strip:
+        if line_strip and not any(h in line_strip for h in ["物件規格解析", "【物件核心規格與黃金價值】", "物件規格", "規格解析"]):
             add_paragraph_with_highlight(document, line_strip)
     document.add_page_break()
 
-    # 591 專業版
+    # 4. 591 專業版
     document.add_heading("591 專業版", level=1)
     document.add_paragraph("#成交戰術 #數據精準 #專業建議")
-    professional_content = sections["【591 專業版】"].strip() or cleaned_content
-    professional_content = remove_internal_prompts(professional_content)
+    professional_content = sections["【591 專業版】"].strip() if sections["【591 專業版】"].strip() else cleaned_content
     professional_lines = limit_lines(filter_generic_landmarks(professional_content.splitlines()), 16)
     for line in professional_lines:
         line_strip = line.strip()
@@ -342,34 +338,32 @@ def save_docx(title: str, content: str) -> str:
             add_paragraph_with_highlight(document, line_strip)
     document.add_page_break()
 
-    # FB 社團吸粉版
+    # 5. FB 社團吸粉版
     document.add_heading("FB 社團吸粉版", level=1)
     document.add_paragraph("#在地社群 #吸粉曝光 #熱區生活")
-    fb_content = sections["【FB 社團吸粉版】"].strip()
-    fb_content = remove_internal_prompts(fb_content)
-    fb_lines = limit_lines(filter_generic_landmarks(fb_content.splitlines()), 10)
+    fb_content = sections["【FB 社團吸粉版】"].strip() if sections["【FB 社團吸粉版】"].strip() else "請見 591 版內容整合"
+    fb_lines = limit_lines(filter_generic_landmarks(fb_content.splitlines()), 12)
     for line in fb_lines:
         line_strip = line.strip()
         if line_strip:
             add_paragraph_with_highlight(document, line_strip)
     document.add_page_break()
 
-    # LINE / 限動版
+    # 6. LINE / 限動版
     document.add_heading("LINE/限動秒殺版", level=1)
     document.add_paragraph("#VIP急售 #限量釋出 #稀缺搶手")
-    line_content = sections["【LINE/限動秒殺版】"].strip()
-    line_content = remove_internal_prompts(line_content)
-    line_lines = limit_lines(filter_generic_landmarks(line_content.splitlines()), 6)
+    line_content = sections["【LINE/限動秒殺版】"].strip() if sections["【LINE/限動秒殺版】"].strip() else "請見 591 版內容整合"
+    line_lines = limit_lines(filter_generic_landmarks(line_content.splitlines()), 8)
     for line in line_lines:
         line_strip = line.strip()
         if line_strip:
             add_paragraph_with_highlight(document, line_strip)
 
-    # Contact block at end with automated fallback
+    # 7. 聯絡區塊
     contact_para = document.add_paragraph()
     contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     contact_name, contact_phone = get_contact_info()
-    contact_text = f"業務聯繫人：{contact_name}　|　電話：{contact_phone}"
+    contact_text = f"業務聯繫人：{contact_name} | 電話：{contact_phone}"
     contact_run = contact_para.add_run(contact_text)
     contact_run.bold = True
 
