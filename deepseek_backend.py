@@ -30,6 +30,8 @@ def build_prompt(property_description: str) -> str:
         "\n\n文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。"
         "\n\n若數據缺失，請精準標示「未提供」，絕對禁止虛構數據。"
         "\n\n整體風格要能直接在 Facebook 或 LINE 上轉發，具備高銷售力。"
+        "\n\n重要：若已成功解析出任何數據（例如總價、坪數、單價、樓層、管理費、車位類型等），請直接在報告內以具體數值呈現，絕對不得保留或輸出任何「數據需人工確認」、「等待人工核對」、「真實物理數據讀取中」或其他內部備註字眼。"
+        "\n\n若資料不足，僅回報「未提供」，不要添加任何額外的人工確認提示。"
         f"\n\n待處理資訊：{property_description}"
     )
 
@@ -174,7 +176,7 @@ def set_header_footer(document: Document, property_name: str) -> None:
     add_field(footer_paragraph, "PAGE")
     footer_paragraph.add_run(" 頁 / 共 ")
     add_field(footer_paragraph, "NUMPAGES")
-    footer_paragraph.add_run(" 頁｜⚠️ 數據需人工確認")
+    footer_paragraph.add_run(" 頁")
 
 
 def extract_region_and_name(title: str, fallback: str) -> tuple[str, str]:
@@ -240,7 +242,7 @@ def save_docx(title: str, content: str) -> str:
     table.cell(0, 0).text = "本案單價"
     table.cell(0, 1).text = "區域行情"
     table.cell(1, 0).text = "價差判讀"
-    table.cell(1, 1).text = "待 AI 解析"
+    table.cell(1, 1).text = "見下文"
     intel_lines = limit_lines(filter_generic_landmarks(intel_section.splitlines()), 12)
     for line in intel_lines:
         line_strip = line.strip()
