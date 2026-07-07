@@ -27,9 +27,10 @@ def build_prompt(property_description: str) -> str:
         "一段完整規格：必須清楚列出「坪數、格局、樓層、管理費、車位類型」，若資訊不足請標示「未提供」。\n\n"
         "一個明確邀請：結尾強制寫「本週僅釋出 3 組帶看名額，歡迎私訊看照片並預約賞屋時段」。\n\n"
         "【執行規則】\n\n"
-        "文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。\n\n"
-        "若數據缺失，請精準標示「未提供」，絕對禁止虛構數據。\n\n"
-        "整體風格要能直接在 Facebook 或 LINE 上轉發，具備高銷售力。\n\n"
+        "1. 文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。\n\n"
+        "2. 【硬性禁止】絕對禁止輸出任何內部筆記、狀態提示、檢查備註（例如：數據需人工確認、等待核對、讀取中、文案生成中）。\n\n"
+        "3. 【誠實原則】若資料缺失，請直接標示「未提供」即可，禁止輸出任何關於系統或數據狀態的描述。\n\n"
+        "4. 【直接產出】你的輸出必須直接作為最終交付給客戶的內容，不要包含對系統的對話或備註。\n\n"
         f"待處理資訊：{property_description}"
     )
 
@@ -108,6 +109,40 @@ def clean_markdown(text: str) -> str:
     return text
 
 
+def remove_internal_prompts(text: str) -> str:
+    """
+    Remove all internal verification prompts and check phrases using strict regex patterns.
+    These are not meant for client delivery.
+    
+    Uses fuzzy regex matching to catch variations of status messages.
+    """
+    # 定義更嚴格的關鍵字組合與正則表達式
+    banned_patterns = [
+        r"\(.*?數據.*?確認.*?\)",      # 匹配 (數據需人工確認) 及變體
+        r"\[.*?數據.*?確認.*?\]",      # 匹配 [數據需人工確認] 及變體
+        r"【.*?數據.*?確認.*?】",      # 匹配 【數據需人工確認】 及變體
+        r"數據.*?確認",                # 匹配 數據需人工確認、數據待確認等
+        r"文案生成中",                 # 匹配 文案生成中
+        r"真實物理數據讀取中",         # 匹配 真實物理數據讀取中
+        r"等待.*?核對",                # 匹配 等待人工核對、等待核對等
+        r"待\s*AI\s*解析",             # 匹配 待 AI 解析
+        r"⚠️\s*數據.*?確認",           # 匹配 ⚠️ 數據需人工確認
+        r"需人工確認",                 # 匹配 需人工確認
+        r"人工確認",                   # 匹配 人工確認
+        r"第\s*\d+\s*頁.*",            # 匹配 第 1 頁... 及其他頁碼
+        r"數據.*?讀取中",              # 匹配 數據讀取中等
+        r"確認中",                     # 匹配 確認中
+        r"生成中",                     # 匹配 生成中
+    ]
+    
+    for pattern in banned_patterns:
+        text = re.sub(pattern, "", text)
+    
+    # 最後刪除空行，確保排版乾淨
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    return text.strip()
+
+
 def add_field(paragraph, instruction: str) -> None:
     # intentionally retained but NOT used: do not insert page fields into output
     field = OxmlElement("w:fldSimple")
@@ -154,6 +189,21 @@ def apply_styles(document: Document) -> None:
     heading2._element.rPr.rFonts.set(qn("w:ascii"), "Arial")
 
 
+def get_contact_info() -> tuple[str, str]:
+    """
+    Get contact information from environment variables.
+    If not available, return default fallback contact info.
+    """
+    contact_name = os.getenv("CONTACT_NAME", "服務專員").strip()
+    contact_phone = os.getenv("CONTACT_PHONE", "").strip()
+    
+    # If phone is not set, use fallback message
+    if not contact_phone:
+        contact_phone = "歡迎私訊洽詢"
+    
+    return contact_name, contact_phone
+
+
 def set_header_footer(document: Document, property_name: str) -> None:
     # Minimal header (property name and date). No page numbers, no warnings.
     section = document.sections[0]
@@ -170,11 +220,12 @@ def set_header_footer(document: Document, property_name: str) -> None:
     right_cell.text = date.today().strftime("%Y/%m/%d")
     right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-    # Footer: include fixed professional contact info for client delivery
+    # Footer: include professional contact info for client delivery
     footer = section.footer
     footer_paragraph = footer.paragraphs[0]
     footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    footer_paragraph.text = "業務聯繫人：服務專員 ｜ 電話：0989739011"
+    contact_name, contact_phone = get_contact_info()
+    footer_paragraph.text = f"業務聯繫人：{contact_name} ｜ 電話：{contact_phone}"
 
 
 def extract_region_and_name(title: str, fallback: str) -> tuple[str, str]:
@@ -224,54 +275,44 @@ def generate_listing(client: genai.Client, property_description: str) -> str:
 
 
 def save_docx(title: str, content: str) -> str:
-    # final sanitization: ensure no internal/check phrases get into the output
-    banned_variants = [
-        "數據需人中確認",
-        "真實物理數據讀取中",
-        "等待人工核對",
-        "待 AI 解析",
-        "⚠️ 數據需人工確認",
-        "需人工確認",
-        "人工確認",
-    ]
-    for p in banned_variants:
-        content = content.replace(p, "")
-    # collapse multiple blank lines
+    # Remove all internal verification prompts first
+    content = remove_internal_prompts(content)
+    
+    # Collapse multiple blank lines
     content = re.sub(r"\n\s*\n+", "\n\n", content)
 
     output_dir = os.path.join(os.getcwd(), "Outputs")
     os.makedirs(output_dir, exist_ok=True)
+    
     cleaned_content = clean_markdown(content)
-    # prefer client-facing section title
+    # Ensure no internal prompts in cleaned content
+    cleaned_content = remove_internal_prompts(cleaned_content)
+    
+    # Prefer client-facing section title
     intel_section = clean_markdown(extract_intel_section(cleaned_content))
+    intel_section = remove_internal_prompts(intel_section)
+    
     sections = extract_sections(cleaned_content)
+    
     document = Document()
     apply_styles(document)
     region, property_name = extract_region_and_name(title, intel_section[:12])
     set_header_footer(document, property_name)
 
-    # --- ensure no banned phrases exist in header/footer or runs ---
+    # Ensure no internal prompts exist in header/footer
     for section in document.sections:
         for p in section.header.paragraphs:
             for run in list(p.runs):
-                text = run.text or ""
-                for bad in banned_variants:
-                    if bad in text:
-                        text = text.replace(bad, "")
-                run.text = text
+                run.text = remove_internal_prompts(run.text or "")
         for p in section.footer.paragraphs:
             for run in list(p.runs):
-                text = run.text or ""
-                for bad in banned_variants:
-                    if bad in text:
-                        text = text.replace(bad, "")
-                run.text = text
+                run.text = remove_internal_prompts(run.text or "")
 
-    # Clean content-level again
-    for bad in banned_variants:
-        cleaned_content = cleaned_content.replace(bad, "")
+    # Final cleanup of content
+    cleaned_content = remove_internal_prompts(cleaned_content)
     cleaned_content = re.sub(r"\n\s*\n+", "\n\n", cleaned_content)
     intel_section = clean_markdown(extract_intel_section(cleaned_content))
+    intel_section = remove_internal_prompts(intel_section)
     sections = extract_sections(cleaned_content)
 
     # Client-facing heading
@@ -292,7 +333,9 @@ def save_docx(title: str, content: str) -> str:
     # 591 專業版
     document.add_heading("591 專業版", level=1)
     document.add_paragraph("#成交戰術 #數據精準 #專業建議")
-    professional_lines = limit_lines(filter_generic_landmarks((sections["【591 專業版】"].strip() or cleaned_content).splitlines()), 16)
+    professional_content = sections["【591 專業版】"].strip() or cleaned_content
+    professional_content = remove_internal_prompts(professional_content)
+    professional_lines = limit_lines(filter_generic_landmarks(professional_content.splitlines()), 16)
     for line in professional_lines:
         line_strip = line.strip()
         if line_strip:
@@ -302,7 +345,9 @@ def save_docx(title: str, content: str) -> str:
     # FB 社團吸粉版
     document.add_heading("FB 社團吸粉版", level=1)
     document.add_paragraph("#在地社群 #吸粉曝光 #熱區生活")
-    fb_lines = limit_lines(filter_generic_landmarks(sections["【FB 社團吸粉版】"].strip().splitlines()), 10)
+    fb_content = sections["【FB 社團吸粉版】"].strip()
+    fb_content = remove_internal_prompts(fb_content)
+    fb_lines = limit_lines(filter_generic_landmarks(fb_content.splitlines()), 10)
     for line in fb_lines:
         line_strip = line.strip()
         if line_strip:
@@ -312,16 +357,21 @@ def save_docx(title: str, content: str) -> str:
     # LINE / 限動版
     document.add_heading("LINE/限動秒殺版", level=1)
     document.add_paragraph("#VIP急售 #限量釋出 #稀缺搶手")
-    line_lines = limit_lines(filter_generic_landmarks(sections["【LINE/限動秒殺版】"].strip().splitlines()), 6)
+    line_content = sections["【LINE/限動秒殺版】"].strip()
+    line_content = remove_internal_prompts(line_content)
+    line_lines = limit_lines(filter_generic_landmarks(line_content.splitlines()), 6)
     for line in line_lines:
         line_strip = line.strip()
         if line_strip:
             add_paragraph_with_highlight(document, line_strip)
 
-    # Ensure contact block is present at end
+    # Contact block at end with automated fallback
     contact_para = document.add_paragraph()
     contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    contact_para.add_run("業務聯繫人：服務專員　|　電話：0989739011").bold = True
+    contact_name, contact_phone = get_contact_info()
+    contact_text = f"業務聯繫人：{contact_name}　|　電話：{contact_phone}"
+    contact_run = contact_para.add_run(contact_text)
+    contact_run.bold = True
 
     filename = f"【成品報告】{region}_{property_name}_{date.today().strftime('%m%d')}.docx"
     file_path = os.path.join(output_dir, filename)
