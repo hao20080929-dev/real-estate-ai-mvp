@@ -106,7 +106,21 @@ def extract_intel_section(content: str) -> str:
 
 
 def clean_markdown(text: str) -> str:
-    return re.sub(r"\*+", "", text)
+    # remove repeated markdown markers and ensure banned phrases removed
+    text = re.sub(r"\*+", "", text)
+    banned = [
+        "數據需人工確認",
+        "真實物理數據讀取中",
+        "等待人工核對",
+        "待 AI 解析",
+        "數據需人中確認",
+        "⚠️ 數據需人工確認",
+    ]
+    for p in banned:
+        text = text.replace(p, "")
+    # collapse multiple blank lines
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    return text
 
 
 def add_field(paragraph, instruction: str) -> None:
@@ -226,6 +240,20 @@ def generate_listing(client: genai.Client, property_description: str) -> str:
 
 
 def save_docx(title: str, content: str) -> str:
+    # final sanitization: remove any internal/manual-check phrases that might appear in AI output
+    banned = [
+        "數據需人工確認",
+        "真實物理數據讀取中",
+        "等待人工核對",
+        "待 AI 解析",
+        "數據需人中確認",
+        "⚠️ 數據需人工確認",
+    ]
+    for p in banned:
+        content = content.replace(p, "")
+    # collapse multiple blank lines
+    content = re.sub(r"\n\s*\n+", "\n\n", content)
+
     output_dir = os.path.join(os.getcwd(), "Outputs")
     os.makedirs(output_dir, exist_ok=True)
     cleaned_content = clean_markdown(content)
