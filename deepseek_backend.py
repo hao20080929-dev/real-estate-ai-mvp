@@ -19,20 +19,21 @@ time.sleep(2)
 
 def build_prompt(property_description: str) -> str:
     return (
-        f"你是一位高成交導向的房仲銷售顧問。請根據以下物件資訊，嚴格依照此六段式骨架撰寫文案，禁止廢話："
-        "\n\n一句抓眼球的標題：要包含地標或最大優勢，如「[行政區]稀缺低總價，首購首選」。"
-        "\n\n一句最強差異：直接點出這間房跟同區其他物件不一樣的特點。"
-        "\n\n三個買方在意的理由：針對物件優勢條列，如「1. 步行5分鐘進捷運；2. 永久景觀棟距；3. 屋主誠售可議」。"
-        "\n\n一段生活場景：用描寫式文字寫出居住感，例如「下班回家下樓就有公園，回家不用找車位」。"
-        "\n\n一段完整規格：必須清楚列出「坪數、格局、樓層、管理費、車位類型」，若資訊不足請標示「未提供」。"
-        "\n\n一個明確邀請：結尾強制寫「本週僅釋出 3 組帶看名額，歡迎私訊看照片並預約賞屋時段」。"
-        "\n\n【執行規則】"
-        "\n\n文案要口語化、精簡，絕對不要出現「格局方正、採光佳」這種無效廢話。"
-        "\n\n若數據缺失，請精準標示「未提供」，絕對禁止虛構數據。"
-        "\n\n整體風格要能直接在 Facebook 或 LINE 上轉發，具備高銷售力。"
-        "\n\n重要：若已成功解析出任何數據（例如總價、坪數、單價、樓層、管理費、車位類型等），請直接在報告內以具體數值呈現，絕對不得保留或輸出任何「數據需人工確認」、「等待人工核對」、「真實物理數據讀取中」或其他內部備註字眼。"
-        "\n\n若資料不足，僅回報「未提供」，不要添加任何額外的人工確認提示。"
-        f"\n\n待處理資訊：{property_description}"
+        f"你是一位高成交導向的房仲銷售顧問。你的輸出即為��客戶看的最終報告，禁止包含任何內部檢查的備註或占位符號。若數據缺失，直接顯示『未提供』或精簡略過即可，絕對禁止輸出任何提示人工確認的語句。"
+        "\n\n請依照以下六段式骨架，產出正式、可直接轉發給客戶的中文銷售文案（口語化、精簡、有銷售力）："
+        "\n1) 一句抓眼球的標題（包含行政區或最大優勢）。"
+        "\n2) 一句最強差異（直接點出與同區不同之處）。"
+        "\n3) 三個買方在意的理由（條列，序號格式）。"
+        "\n4) 一段生活場景（描寫式，帶入居住想像）。"
+        "\n5) 物件規格解析（必須清楚列出：坪數、格局、樓層、管理費、車位類型；若缺資訊請標示「未提供」）。"
+        "\n6) 一個明確邀請（結尾強制寫：本週僅釋出 3 組帶看名額，歡迎私訊看照片並預約賞屋時段）。"
+        "\n\n執行細則："
+        "\n- 禁止出現內部備註或占位字樣（例如：數據需人工確認、待 AI 解析、等待人工核對、真實物理數據讀取中 等）。"
+        "\n- 禁止在報告中顯示頁碼或任何形式的『第 X 頁』標記。PDF/Docx 不應包含頁碼。"
+        "\n- 報告標題與段落請使用對外正式用語，例如使用「物件規格解析」而非「數據深度偵察」。"
+        "\n- 若能解析出數據（總價、坪數、單價、樓層、管理費、車位類型等），請直接以數值呈現；若缺資料，僅顯示「未提供」。"
+        "\n- 報告末段必須包含業務聯繫資訊（示範：業務聯繫人：服務專員 ｜ 電話：0989739011），不可留空。"
+        f"\n\n物件資訊：{property_description}"
     )
 
 
@@ -94,36 +95,24 @@ def limit_lines(lines: list[str], max_lines: int) -> list[str]:
 
 
 def extract_intel_section(content: str) -> str:
-    start_marker = "1. 數據深度偵察"
-    end_marker = "2. 房仲專屬三合一輸出"
+    # adapt to new client-facing section title
+    start_marker = "物件規格解析"
     start_index = content.find(start_marker)
     if start_index == -1:
         return content
-    end_index = content.find(end_marker, start_index)
-    if end_index == -1:
-        return content[start_index:]
-    return content[start_index:end_index]
+    # return from that marker to next major section if exists
+    return content[start_index:]
 
 
 def clean_markdown(text: str) -> str:
-    # remove repeated markdown markers and ensure banned phrases removed
+    # remove repeated markdown markers and collapse blank lines
     text = re.sub(r"\*+", "", text)
-    banned = [
-        "數據需人工確認",
-        "真實物理數據讀取中",
-        "等待人工核對",
-        "待 AI 解析",
-        "數據需人中確認",
-        "⚠️ 數據需人工確認",
-    ]
-    for p in banned:
-        text = text.replace(p, "")
-    # collapse multiple blank lines
     text = re.sub(r"\n\s*\n+", "\n\n", text)
     return text
 
 
 def add_field(paragraph, instruction: str) -> None:
+    # intentionally retained but NOT used: do not insert page fields into output
     field = OxmlElement("w:fldSimple")
     field.set(qn("w:instr"), instruction)
     paragraph._p.append(field)
@@ -134,7 +123,6 @@ def add_paragraph_with_highlight(document: Document, text: str) -> None:
     paragraph.paragraph_format.line_spacing = 1.5
     paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     pattern = re.compile(r"(總價[^，。\n]*|單價[^，。\n]*|完工日期[^，。\n]*)")
-    remaining = text
     last_index = 0
     for match in pattern.finditer(text):
         start, end = match.span()
@@ -170,6 +158,7 @@ def apply_styles(document: Document) -> None:
 
 
 def set_header_footer(document: Document, property_name: str) -> None:
+    # Minimal header (property name and date). No page numbers, no warnings.
     section = document.sections[0]
     section.top_margin = Inches(0.5)
     section.bottom_margin = Inches(0.5)
@@ -180,17 +169,15 @@ def set_header_footer(document: Document, property_name: str) -> None:
     header_table.autofit = True
     left_cell = header_table.cell(0, 0)
     right_cell = header_table.cell(0, 1)
-    left_cell.text = f"[{property_name}]"
+    left_cell.text = f"{property_name}"
     right_cell.text = date.today().strftime("%Y/%m/%d")
     right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    # Footer: include fixed professional contact info for client delivery
     footer = section.footer
     footer_paragraph = footer.paragraphs[0]
     footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    footer_paragraph.add_run("第 ")
-    add_field(footer_paragraph, "PAGE")
-    footer_paragraph.add_run(" 頁 / 共 ")
-    add_field(footer_paragraph, "NUMPAGES")
-    footer_paragraph.add_run(" 頁")
+    footer_paragraph.text = "業務聯繫人：服務專員 ｜ 電話：0989739011"
 
 
 def extract_region_and_name(title: str, fallback: str) -> tuple[str, str]:
@@ -240,31 +227,7 @@ def generate_listing(client: genai.Client, property_description: str) -> str:
 
 
 def save_docx(title: str, content: str) -> str:
-    # final sanitization: remove any internal/manual-check phrases that might appear in AI output
-    banned = [
-        "數據需人工確認",
-        "真實物理數據讀取中",
-        "等待人工核對",
-        "待 AI 解析",
-        "數據需人中確認",
-        "⚠️ 數據需人工確認",
-    ]
-    for p in banned:
-        content = content.replace(p, "")
-    # collapse multiple blank lines
-    content = re.sub(r"\n\s*\n+", "\n\n", content)
-
-    output_dir = os.path.join(os.getcwd(), "Outputs")
-    os.makedirs(output_dir, exist_ok=True)
-    cleaned_content = clean_markdown(content)
-    intel_section = clean_markdown(extract_intel_section(cleaned_content))
-    sections = extract_sections(cleaned_content)
-    document = Document()
-    apply_styles(document)
-    region, property_name = extract_region_and_name(title, intel_section[:12])
-    set_header_footer(document, property_name)
-
-    # --- 強制清理 header/footer 與文件內任何殘留禁止字詞 ---
+    # final sanitization: ensure no internal/check phrases get into the output
     banned_variants = [
         "數據需人工確認",
         "數據需人中確認",
@@ -275,63 +238,54 @@ def save_docx(title: str, content: str) -> str:
         "需人工確認",
         "人工確認",
     ]
-
-    for section in document.sections:
-        # header
-        hdr = section.header
-        for p in hdr.paragraphs:
-            for run in list(p.runs):
-                text = run.text or ""
-                for bad in banned_variants:
-                    if bad in text:
-                        text = text.replace(bad, "")
-                run.text = text
-        # footer
-        ftr = section.footer
-        for p in ftr.paragraphs:
-            for run in list(p.runs):
-                text = run.text or ""
-                for bad in banned_variants:
-                    if bad in text:
-                        text = text.replace(bad, "")
-                run.text = text
-
-    # 清除正文每個段落與 run 中的 banned 字詞
-    for paragraph in document.paragraphs:
-        for run in list(paragraph.runs):
-            text = run.text or ""
-            for bad in banned_variants:
-                if bad in text:
-                    text = text.replace(bad, "")
-            run.text = text
-
-    # 清除表格內的 banned 字詞（每個 cell 每個段落）
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    for run in list(p.runs):
-                        text = run.text or ""
-                        for bad in banned_variants:
-                            if bad in text:
-                                text = text.replace(bad, "")
-                        run.text = text
-
-    # 最後在 content 字串上再做一次防護
-    for bad in banned_variants:
-        content = content.replace(bad, "")
+    for p in banned_variants:
+        content = content.replace(p, "")
+    # collapse multiple blank lines
     content = re.sub(r"\n\s*\n+", "\n\n", content)
+
+    output_dir = os.path.join(os.getcwd(), "Outputs")
+    os.makedirs(output_dir, exist_ok=True)
     cleaned_content = clean_markdown(content)
+    # prefer client-facing section title
+    intel_section = clean_markdown(extract_intel_section(cleaned_content))
+    sections = extract_sections(cleaned_content)
+    document = Document()
+    apply_styles(document)
+    region, property_name = extract_region_and_name(title, intel_section[:12])
+    set_header_footer(document, property_name)
+
+    # --- ensure no banned phrases exist in header/footer or runs ---
+    for section in document.sections:
+        for p in section.header.paragraphs:
+            for run in list(p.runs):
+                text = run.text or ""
+                for bad in banned_variants:
+                    if bad in text:
+                        text = text.replace(bad, "")
+                run.text = text
+        for p in section.footer.paragraphs:
+            for run in list(p.runs):
+                text = run.text or ""
+                for bad in banned_variants:
+                    if bad in text:
+                        text = text.replace(bad, "")
+                run.text = text
+
+    # Clean content-level again
+    for bad in banned_variants:
+        cleaned_content = cleaned_content.replace(bad, "")
+    cleaned_content = re.sub(r"\n\s*\n+", "\n\n", cleaned_content)
     intel_section = clean_markdown(extract_intel_section(cleaned_content))
     sections = extract_sections(cleaned_content)
 
-    document.add_heading("行情深度偵察", level=1)
-    document.add_paragraph("#行情對比 #抗跌 #稀缺")
+    # Client-facing heading
+    document.add_heading("物件規格解析", level=1)
+    document.add_paragraph("#物件規格 #市場解析 #銷售要點")
     table = document.add_table(rows=2, cols=2)
     table.cell(0, 0).text = "本案單價"
     table.cell(0, 1).text = "區域行情"
     table.cell(1, 0).text = "價差判讀"
-    table.cell(1, 1).text = "見下文"
+    table.cell(1, 1).text = "詳見下方說明"
     intel_lines = limit_lines(filter_generic_landmarks(intel_section.splitlines()), 12)
     for line in intel_lines:
         line_strip = line.strip()
@@ -339,6 +293,7 @@ def save_docx(title: str, content: str) -> str:
             add_paragraph_with_highlight(document, line_strip)
     document.add_page_break()
 
+    # 591 專業版
     document.add_heading("591 專業版", level=1)
     document.add_paragraph("#成交戰術 #數據精準 #專業建議")
     professional_lines = limit_lines(filter_generic_landmarks((sections["【591 專業版】"].strip() or cleaned_content).splitlines()), 16)
@@ -348,6 +303,7 @@ def save_docx(title: str, content: str) -> str:
             add_paragraph_with_highlight(document, line_strip)
     document.add_page_break()
 
+    # FB 社團吸粉版
     document.add_heading("FB 社團吸粉版", level=1)
     document.add_paragraph("#在地社群 #吸粉曝光 #熱區生活")
     fb_lines = limit_lines(filter_generic_landmarks(sections["【FB 社團吸粉版】"].strip().splitlines()), 10)
@@ -357,6 +313,7 @@ def save_docx(title: str, content: str) -> str:
             add_paragraph_with_highlight(document, line_strip)
     document.add_page_break()
 
+    # LINE / 限動版
     document.add_heading("LINE/限動秒殺版", level=1)
     document.add_paragraph("#VIP急售 #限量釋出 #稀缺搶手")
     line_lines = limit_lines(filter_generic_landmarks(sections["【LINE/限動秒殺版】"].strip().splitlines()), 6)
@@ -364,7 +321,13 @@ def save_docx(title: str, content: str) -> str:
         line_strip = line.strip()
         if line_strip:
             add_paragraph_with_highlight(document, line_strip)
-    filename = f"【戰術報告】{region}_{property_name}_{date.today().strftime('%m%d')}.docx"
+
+    # Ensure contact block is present at end
+    contact_para = document.add_paragraph()
+    contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    contact_para.add_run("業務聯繫人：服務專員　|　電話：0989739011").bold = True
+
+    filename = f"【成品報告】{region}_{property_name}_{date.today().strftime('%m%d')}.docx"
     file_path = os.path.join(output_dir, filename)
     document.save(file_path)
     return file_path
@@ -386,7 +349,7 @@ def main() -> None:
         output = generate_listing(client, description)
         base_title = title or (description[:12] if description else "物件")
         save_docx(base_title, output)
-        print("✅ 超級專家報告已生成在 Outputs 資料夾")
+        print("✅ 成品報告已生成在 Outputs 資料夾（可直接傳給客戶）")
 
 
 if __name__ == "__main__":
